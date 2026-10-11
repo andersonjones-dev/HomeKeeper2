@@ -1,0 +1,1 @@
+- [HomeKeeper first milestone](homekeeper-first-milestone.md) — Keep the app local-first and fix preview or workflow blockers before expanding features.
