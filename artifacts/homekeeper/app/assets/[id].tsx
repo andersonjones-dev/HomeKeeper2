@@ -1,8 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,9 @@ export default function AssetDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { assets, loading, error, retryLoad, deleteAsset } = useAssets();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const asset = assets.find((item) => item.id === id);
 
   if (loading || error) {
@@ -51,23 +53,17 @@ export default function AssetDetailsScreen() {
           ? `Expires in ${warrantyDays} days`
           : 'Still covered';
 
-  const confirmDelete = () => {
-    Alert.alert(
-      'Delete this asset?',
-      `${asset.name} will be removed from HomeKeeper.`,
-      [
-        { text: 'Keep asset', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void deleteAsset(asset.id)
-              .then(() => router.replace('/(tabs)/assets' as Href))
-              .catch(() => Alert.alert('Could not delete', 'Please try again.'));
-          },
-        },
-      ],
-    );
+  const handleDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAsset(asset.id);
+      router.replace('/(tabs)/assets' as Href);
+    } catch {
+      setDeleteError('Could not remove this asset. Your saved list has not been changed.');
+      setDeleting(false);
+    }
   };
 
   return (
@@ -163,15 +159,60 @@ export default function AssetDetailsScreen() {
           ) : null}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={confirmDelete}
-          style={[styles.deleteButton, { borderColor: colors.border }]}
-          testID="asset-delete-button"
-        >
-          <Feather name="trash-2" size={17} color={colors.destructive} />
-          <Text style={[styles.deleteText, { color: colors.destructive }]}>Delete asset</Text>
-        </Pressable>
+        {confirmingDelete ? (
+          <View
+            accessibilityRole="alert"
+            style={[styles.confirmDeleteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={[styles.confirmDeleteTitle, { color: colors.foreground }]}>
+              Remove {asset.name}?
+            </Text>
+            <Text style={[styles.confirmDeleteMessage, { color: colors.mutedForeground }]}>
+              This deletes the asset from this phone. This can’t be undone.
+            </Text>
+            {deleteError ? (
+              <Text accessibilityRole="alert" style={[styles.deleteError, { color: colors.destructive }]}>
+                {deleteError}
+              </Text>
+            ) : null}
+            <View style={styles.confirmActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={deleting}
+                onPress={() => {
+                  setConfirmingDelete(false);
+                  setDeleteError(null);
+                }}
+                style={[styles.keepButton, { backgroundColor: colors.secondary }]}
+                testID="asset-delete-cancel"
+              >
+                <Text style={[styles.keepText, { color: colors.secondaryForeground }]}>Keep asset</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: deleting }}
+                disabled={deleting}
+                onPress={() => void handleDelete()}
+                style={[styles.confirmDeleteButton, { backgroundColor: colors.destructive }]}
+                testID="asset-delete-confirm"
+              >
+                <Text style={[styles.confirmDeleteText, { color: colors.destructiveForeground }]}>
+                  {deleting ? 'Removing…' : 'Delete'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setConfirmingDelete(true)}
+            style={[styles.deleteButton, { borderColor: colors.border }]}
+            testID="asset-delete-button"
+          >
+            <Feather name="trash-2" size={17} color={colors.destructive} />
+            <Text style={[styles.deleteText, { color: colors.destructive }]}>Delete asset</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -230,6 +271,15 @@ const styles = StyleSheet.create({
   notesText: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 20, paddingLeft: 24 },
   deleteButton: { minHeight: 52, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 9, marginTop: 22 },
   deleteText: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  confirmDeleteCard: { borderWidth: 1, borderRadius: 19, padding: 16, marginTop: 22 },
+  confirmDeleteTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  confirmDeleteMessage: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginTop: 6 },
+  deleteError: { fontFamily: 'Inter_500Medium', fontSize: 12, lineHeight: 18, marginTop: 9 },
+  confirmActions: { flexDirection: 'row', gap: 9, marginTop: 15 },
+  keepButton: { flex: 1, minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  keepText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  confirmDeleteButton: { flex: 1, minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  confirmDeleteText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 13 },
   notFoundTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17 },
   link: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
